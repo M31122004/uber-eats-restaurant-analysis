@@ -1,199 +1,193 @@
-import streamlit as st
+import sqlite3
 import pandas as pd
-import mysql.connector
+import streamlit as st
 
-st.set_page_config(page_title="Uber Eats Intelligence System", layout="wide")
+st.set_page_config(page_title="Uber Eats Intelligence", layout="wide")
 
-# -----------------------------
-# MySQL Connection
-# -----------------------------
-conn = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="Mathankumar@63",
-    database="uber_eats"
-)
+# Database connection
+def get_connection():
+    return sqlite3.connect("restaurants.db")
 
-# -----------------------------
-# TITLE
-# -----------------------------
-st.title("🍔 Uber Eats Bangalore Restaurant Intelligence System")
+# ---------------- DASHBOARD ---------------- #
 
-# -----------------------------
-# DATASET PREVIEW
-# -----------------------------
-st.header("Restaurant Dataset Preview")
+st.sidebar.title("📌 Navigation")
+page = st.sidebar.selectbox("Go to", ["Dashboard", "Business Q&A"])
 
-query = "SELECT * FROM restaurants"
-df = pd.read_sql(query, conn)
+if page == "Dashboard":
 
-st.dataframe(df.head(20))
+    st.title("📊 Uber Eats Bangalore Dashboard")
 
+    conn = get_connection()
 
-# -----------------------------
-# FILTER SECTION
-# -----------------------------
-st.sidebar.header("Filter Restaurants")
+    col1,col2 = st.columns(2)
 
-location = st.sidebar.selectbox(
-    "Select Location",
-    df["location"].dropna().unique()
-)
+    total = pd.read_sql("SELECT COUNT(*) FROM restaurants",conn).iloc[0,0]
 
-query_filter = f"""
-SELECT * FROM restaurants
-WHERE location = '{location}'
-LIMIT 20
-"""
+    avg_rating = pd.read_sql("""
+    SELECT AVG(CAST(SUBSTR(rate,1,3) AS FLOAT))
+    FROM restaurants
+    WHERE rate NOT LIKE 'NEW'
+    AND rate NOT LIKE '-'
+    """,conn).iloc[0,0]
 
-filtered_df = pd.read_sql(query_filter, conn)
+    col1.metric("Total Restaurants",total)
+    col2.metric("Average Rating",round(avg_rating,2))
 
-st.header(f"Restaurants in {location}")
-st.dataframe(filtered_df)
+    st.subheader("Restaurant Data Preview")
 
+    df = pd.read_sql("SELECT * FROM restaurants LIMIT 20",conn)
 
-# -----------------------------
-# BUSINESS QUESTIONS
-# -----------------------------
-st.header("📊 Business Insights")
+    st.dataframe(df)
 
-# Question 1
-st.subheader("1️⃣ Locations with Highest Average Ratings")
+    conn.close()
 
-query1 = """
-SELECT location, AVG(rate) AS avg_rating
-FROM restaurants
-GROUP BY location
-ORDER BY avg_rating DESC
-LIMIT 10
-"""
+# ---------------- BUSINESS Q&A ---------------- #
 
-df1 = pd.read_sql(query1, conn)
-st.dataframe(df1)
+elif page == "Business Q&A":
 
+    st.title("🔍 Business Questions Analysis")
 
-# Question 2
-st.subheader("2️⃣ Locations with Most Restaurants")
+    question = st.selectbox(
+        "Select Business Question",
+        [
+        "1. Highest Average Rating Restaurant Type",
+        "2. Most Popular Restaurant Types",
+        "3. Online Order Impact on Rating",
+        "4. Table Booking Impact on Rating",
+        "5. Best Price Range",
+        "6. Most Common Restaurant Types",
+        "7. Top Rated Restaurant Types",
+        "8. Niche Opportunities",
+        "9. Cost vs Rating Analysis",
+        "10. Top Premium Restaurants"
+        ]
+    )
 
-query2 = """
-SELECT location, COUNT(*) AS total_restaurants
-FROM restaurants
-GROUP BY location
-ORDER BY total_restaurants DESC
-LIMIT 10
-"""
+    conn = get_connection()
 
-df2 = pd.read_sql(query2, conn)
-st.dataframe(df2)
+    try:
 
+        if "1." in question:
 
-# Question 3
-st.subheader("3️⃣ Does Online Ordering Improve Ratings?")
+            query = """
+            SELECT "listed_in(type)" AS Restaurant_Type,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY "listed_in(type)"
+            ORDER BY Avg_Rating DESC
+            """
 
-query3 = """
-SELECT online_order, AVG(rate) AS avg_rating
-FROM restaurants
-GROUP BY online_order
-"""
+        elif "2." in question:
 
-df3 = pd.read_sql(query3, conn)
-st.dataframe(df3)
+            query = """
+            SELECT "listed_in(type)" AS Restaurant_Type,
+            COUNT(*) AS Total_Restaurants
+            FROM restaurants
+            GROUP BY "listed_in(type)"
+            ORDER BY Total_Restaurants DESC
+            """
 
+        elif "3." in question:
 
-# Question 4
-st.subheader("4️⃣ Table Booking Impact on Ratings")
+            query = """
+            SELECT online_order,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY online_order
+            """
 
-query4 = """
-SELECT book_table, AVG(rate) AS avg_rating
-FROM restaurants
-GROUP BY book_table
-"""
+        elif "4." in question:
 
-df4 = pd.read_sql(query4, conn)
-st.dataframe(df4)
+            query = """
+            SELECT book_table,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY book_table
+            """
 
+        elif "5." in question:
 
-# Question 5
-st.subheader("5️⃣ Average Cost vs Rating")
+            query = """
+            SELECT "approx_cost(for two people)" AS Cost,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY "approx_cost(for two people)"
+            ORDER BY Avg_Rating DESC
+            LIMIT 10
+            """
 
-query5 = """
-SELECT approx_cost_for_two, AVG(rate) AS avg_rating
-FROM restaurants
-GROUP BY approx_cost_for_two
-ORDER BY approx_cost_for_two
-LIMIT 10
-"""
+        elif "6." in question:
 
-df5 = pd.read_sql(query5, conn)
-st.dataframe(df5)
+            query = """
+            SELECT "listed_in(type)" AS Category,
+            COUNT(*) AS Count
+            FROM restaurants
+            GROUP BY "listed_in(type)"
+            ORDER BY Count DESC
+            """
 
+        elif "7." in question:
 
-# Question 6
-st.subheader("6️⃣ Most Common Cuisines")
+            query = """
+            SELECT "listed_in(type)" AS Category,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY "listed_in(type)"
+            ORDER BY Avg_Rating DESC
+            """
 
-query6 = """
-SELECT cuisines, COUNT(*) AS total
-FROM restaurants
-GROUP BY cuisines
-ORDER BY total DESC
-LIMIT 10
-"""
+        elif "8." in question:
 
-df6 = pd.read_sql(query6, conn)
-st.dataframe(df6)
+            query = """
+            SELECT "listed_in(type)" AS Category,
+            COUNT(*) AS Count,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY "listed_in(type)"
+            HAVING Count < 10
+            ORDER BY Avg_Rating DESC
+            """
 
+        elif "9." in question:
 
-# Question 7
-st.subheader("7️⃣ Highest Rated Restaurants")
+            query = """
+            SELECT "approx_cost(for two people)" AS Cost,
+            AVG(CAST(SUBSTR(rate,1,3) AS FLOAT)) AS Avg_Rating
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            GROUP BY "approx_cost(for two people)"
+            ORDER BY Avg_Rating DESC
+            """
 
-query7 = """
-SELECT restaurant_name, rate, location
-FROM restaurants
-ORDER BY rate DESC
-LIMIT 10
-"""
+        elif "10." in question:
 
-df7 = pd.read_sql(query7, conn)
-st.dataframe(df7)
+            query = """
+            SELECT name AS Name,
+            CAST(SUBSTR(rate,1,3) AS FLOAT) AS Rating,
+            "approx_cost(for two people)" AS Price_for_Two
+            FROM restaurants
+            WHERE rate NOT LIKE 'NEW'
+            AND rate NOT LIKE '-'
+            ORDER BY Rating DESC
+            LIMIT 10
+            """
 
+        df = pd.read_sql(query,conn)
 
-# Question 8
-st.subheader("8️⃣ Restaurants Offering Online Ordering")
+        st.subheader(f"Results: {question}")
 
-query8 = """
-SELECT restaurant_name, location
-FROM restaurants
-WHERE online_order = 'Yes'
-LIMIT 10
-"""
+        st.dataframe(df)
 
-df8 = pd.read_sql(query8, conn)
-st.dataframe(df8)
+    except Exception as e:
 
+        st.error(f"Query Error: {e}")
 
-# Question 9
-st.subheader("9️⃣ Restaurants with Table Booking")
+    finally:
 
-query9 = """
-SELECT restaurant_name, location
-FROM restaurants
-WHERE book_table = 'Yes'
-LIMIT 10
-"""
-
-df9 = pd.read_sql(query9, conn)
-st.dataframe(df9)
-
-
-# Question 10
-st.subheader("🔟 Premium Restaurants (High Cost)")
-
-query10 = """
-SELECT restaurant_name, approx_cost_for_two
-FROM restaurants
-ORDER BY approx_cost_for_two DESC
-LIMIT 10
-"""
-
-df10 = pd.read_sql(query10, conn)
-st.dataframe(df10)
+        conn.close()
