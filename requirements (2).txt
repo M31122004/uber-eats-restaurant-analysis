@@ -1,3 +1,9 @@
-pandasplotly
-streamlit
 pandas
+streamlit
+plotly
+mysql-connector-python
+openpyxl
+reportlab
+numpy
+scikit-learn
+openai
